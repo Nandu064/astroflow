@@ -29,14 +29,13 @@
       </v-col>
       <v-col cols="12" sm="6" md="4">
         <v-text-field
-          v-model.number="minYear"
+          v-model.number="minYearInput"
           label="Discovered after year"
           variant="outlined"
           density="compact"
           type="number"
           class="font-mono"
           bg-color="rgba(6,6,18,.9)"
-          @change="refetch()"
         />
       </v-col>
     </v-row>
@@ -90,9 +89,10 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useQuery } from '@vue/apollo-composable'
 import gql from 'graphql-tag'
+import { useDebouncedRef } from '@/composables/useDebounce.js'
 
 const EXOPLANETS_QUERY = gql`
   query Exoplanets($discoveryMethod: String, $minYear: Int, $page: Int, $perPage: Int) {
@@ -106,8 +106,11 @@ const EXOPLANETS_QUERY = gql`
 `
 
 const selectedMethod = ref(null)
-const minYear = ref(null)
 const methods = ['Transit', 'Radial Velocity', 'Direct Imaging', 'Gravitational Microlensing', 'Astrometry', 'Timing Variations']
+
+// innerValue → bound to the text field (updates on every keystroke, UI stays responsive)
+// debouncedValue → used as the GraphQL variable (fires only 400ms after the user stops typing)
+const { innerValue: minYearInput, debouncedValue: minYear } = useDebouncedRef(null, 400)
 
 const { result, loading, refetch } = useQuery(EXOPLANETS_QUERY, () => ({
   discoveryMethod: selectedMethod.value,

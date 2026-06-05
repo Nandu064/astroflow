@@ -9,8 +9,8 @@ engine = create_async_engine(
     settings.database_url,
     echo=False,
     pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20,
+    pool_size=5,
+    max_overflow=10,
 )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -42,11 +42,32 @@ def get_redis() -> Optional[aioredis.Redis]:
 
 async def init_db() -> None:
     global _redis_client
+    import asyncio
+    import logging
+    log = logging.getLogger(__name__)
 
     # Import all models so Base knows about them before create_all
     from app.models import asteroid, solar_event, exoplanet, etl_job  # noqa: F401
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Retry DB connection — Railway Postgres can take a few seconds to be ready
+    for attempt in range(1, 11):
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            log.info("Database ready after %d attempt(s)", attempt)
+            break
+        except Exception as exc:
+            if attempt == 10:
+                log.error("Database unavailable after 10 attempts — giving up: %s", exc)
+                raise
+            log.warning("DB not ready (attempt %d/10): %s — retrying in 3s", attempt, exc)
+            await asyncio.sleep(3)
 
-    _redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)
+    # Redis is optional — app works without it
+    try:
+        _redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)
+        await _redis_client.ping()
+        log.info("Redis connected")
+    except Exception as exc:
+        log.warning("Redis unavailable — continuing without it: %s", exc)
+        _redis_client = None

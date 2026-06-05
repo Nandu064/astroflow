@@ -34,7 +34,7 @@ app.add_middleware(
 )
 
 # GraphQL — Strawberry + FastAPI integration
-graphql_app = GraphQLRouter(schema, graphiql=True)
+graphql_app = GraphQLRouter(schema)
 app.include_router(graphql_app, prefix="/graphql")
 
 # REST health endpoints
