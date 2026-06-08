@@ -42,10 +42,15 @@ async def run() -> None:
                     diam = neo.get("estimated_diameter", {}).get("meters", {})
 
                     approach_date = None
-                    raw_date = ca.get("close_approach_date_full") or ca.get("close_approach_date")
+                    # close_approach_date is always "YYYY-MM-DD" — safe to parse directly.
+                    # close_approach_date_full is "YYYY-Mon-DD HH:MM" — [:10] gives "YYYY-Mon-D"
+                    # which does NOT match %Y-%m-%d, so always prefer the simple field first.
+                    raw_date = ca.get("close_approach_date") or ca.get("close_approach_date_full")
                     if raw_date:
                         try:
-                            approach_date = datetime.strptime(raw_date[:10], "%Y-%m-%d")
+                            approach_date = datetime.strptime(
+                                raw_date[:10], "%Y-%m-%d"
+                            ).replace(tzinfo=timezone.utc)
                         except ValueError:
                             pass
 

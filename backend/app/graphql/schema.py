@@ -4,7 +4,7 @@ import time
 import strawberry
 import psutil
 
-from sqlalchemy import select, func, desc, asc
+from sqlalchemy import select, func, desc, asc, nullslast, nullsfirst
 from app.database import AsyncSessionLocal, get_redis
 from app.models.asteroid import Asteroid
 from app.models.solar_event import SolarEvent
@@ -86,14 +86,19 @@ class Query:
             )).scalar_one()
 
             col = getattr(Asteroid, sort_by, Asteroid.approach_date)
-            order = desc(col) if sort_desc else asc(col)
+            # nullslast so rows without approach_date don't float to the top
+            order = nullslast(desc(col)) if sort_desc else nullsfirst(asc(col))
             rows = (await db.execute(
                 base_q.order_by(order).offset((page - 1) * per_page).limit(per_page)
             )).scalars().all()
 
+            # Map inside the session — accessing detached ORM objects after session
+            # close can return stale/null values for nullable columns in SQLAlchemy 2.0
+            items = [_asteroid(a) for a in rows]
+
         total_pages = max(1, (total + per_page - 1) // per_page)
         return PaginatedAsteroids(
-            items=[_asteroid(a) for a in rows],
+            items=items,
             total=total, page=page, per_page=per_page, total_pages=total_pages,
         )
 
@@ -101,7 +106,7 @@ class Query:
     async def asteroid(self, id: int) -> Optional[AsteroidType]:
         async with AsyncSessionLocal() as db:
             a = await db.get(Asteroid, id)
-        return _asteroid(a) if a else None
+            return _asteroid(a) if a else None
 
     @strawberry.field
     async def solar_events(
@@ -115,7 +120,7 @@ class Query:
             if event_type:
                 q = q.where(SolarEvent.event_type == event_type)
             rows = (await db.execute(q)).scalars().all()
-        return [_solar(e) for e in rows]
+            return [_solar(e) for e in rows]
 
     @strawberry.field
     async def exoplanets(
@@ -142,9 +147,11 @@ class Query:
                 .offset((page - 1) * per_page).limit(per_page)
             )).scalars().all()
 
+            items = [_exoplanet(p) for p in rows]
+
         total_pages = max(1, (total + per_page - 1) // per_page)
         return PaginatedExoplanets(
-            items=[_exoplanet(p) for p in rows],
+            items=items,
             total=total, page=page, per_page=per_page, total_pages=total_pages,
         )
 
@@ -152,7 +159,7 @@ class Query:
     async def etl_jobs(self) -> List[ETLJobType]:
         async with AsyncSessionLocal() as db:
             rows = (await db.execute(select(ETLJob).order_by(ETLJob.job_name))).scalars().all()
-        return [_etl_job(j) for j in rows]
+            return [_etl_job(j) for j in rows]
 
     @strawberry.field
     async def dashboard_summary(self) -> DashboardSummaryType:

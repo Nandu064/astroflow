@@ -3,6 +3,12 @@ import vue from '@vitejs/plugin-vue'
 import vuetify from 'vite-plugin-vuetify'
 import { fileURLToPath, URL } from 'node:url'
 
+// Inside Docker: BACKEND_HOST=backend:8000
+// Local dev:     BACKEND_HOST=localhost:8001 (default)
+const BACKEND_HOST = process.env.BACKEND_HOST || 'localhost:8001'
+const HTTP_BACKEND  = `http://${BACKEND_HOST}`
+const WS_BACKEND    = `ws://${BACKEND_HOST}`
+
 export default defineConfig({
   plugins: [
     vue(),
@@ -14,12 +20,15 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port: 5174,
     proxy: {
-      '/graphql': { target: 'http://localhost:8000', changeOrigin: true },
-      // Exact match only: /health and /health/etl — not /health/server (Vue route)
-      '^/health(/etl)?$': { target: 'http://localhost:8000', changeOrigin: true },
-      '/ws':      { target: 'ws://localhost:8000',  ws: true, changeOrigin: true },
+      '/graphql': { target: HTTP_BACKEND, changeOrigin: true },
+      '/api': {
+        target: HTTP_BACKEND,
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+      '/ws': { target: WS_BACKEND, ws: true, changeOrigin: true },
     },
   },
 })

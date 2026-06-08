@@ -15,7 +15,7 @@ export const useHealthStore = defineStore('health', () => {
 
   async function fetchServer() {
     try {
-      const res = await fetch(`${BASE}/health`)
+      const res = await fetch(`${BASE}/api/health`)
       server.value = await res.json()
       error.value = null
     } catch (e) {
@@ -25,7 +25,7 @@ export const useHealthStore = defineStore('health', () => {
 
   async function fetchEtl() {
     try {
-      const res = await fetch(`${BASE}/health/etl`)
+      const res = await fetch(`${BASE}/api/health/etl`)
       etl.value = await res.json()
     } catch (e) {
       error.value = e.message
